@@ -28,6 +28,50 @@ df['Date_Time'] = df['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m
 df.plot(x=cols[0], y=cols[1])
 
 
+#
+# Plot the events 
+#
+wbook2 = pd.ExcelFile('data/inspection_results_and_defects_August_september.xlsx')
+sheet2 = wbook2.parse('Defects')
+cols2 = ['Date_Time','Defect code']
+
+
+
+
+
+
+
+
+
+
+
+
+
+df2 = pd.DataFrame(data=sheet2, columns=cols2)
+print(df2)
+
+
+df3 = df2
+df3.dropna(subset=['Defect code'], inplace=True)
+print(df3)
+
+
+
+
+
+df4 = df3.copy()
+df4 = df4[df4['Defect code'] == '3C']
+print(df4)
+
+
+df4['Defect code'] = 1
+print(df4)
+
+df4['Date_Time'] = df4['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m.%y %H:%M:%S"))
+df4.plot(x=cols2[0], y=cols2[1])
+
+
+
 
 
 #####################################################################
