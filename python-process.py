@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
+from pandasql import sqldf, load_meat, load_births
+pysqldf = lambda q: sqldf(q, globals())
 
 #
 # Plot the Waste produced
@@ -21,7 +23,7 @@ import matplotlib.pyplot as plt
 #
 wbook = pd.ExcelFile('data/Wastes_August_september_m.xlsx')
 sheet = wbook.parse('9000_E06')
-cols = ['Date_Time', 'Quantity']
+cols = ['Date', 'Quantity']
 df = pd.DataFrame(data=sheet, columns = cols)
 #print(df)
 df['Date_Time'] = df['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m.%y %H:%M:%S"))
@@ -29,46 +31,136 @@ df.plot(x=cols[0], y=cols[1])
 
 
 #
-# Plot the events 
+# Calculate Waste as sum by Day
+#
+wbook = pd.ExcelFile('data/Wastes_August_september_m.xlsx')
+sheet = wbook.parse('9000_E06')
+cols = ['Date', 'Quantity']
+df = pd.DataFrame(data=sheet, columns = cols)
+qry = "select Date, sum(Quantity)*5 from df group by Date"
+dfout = pysqldf(qry)
+print(df)
+dfout['Date'] = dfout['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
+dfout.plot(x='Date', y='sum(Quantity)*5')
+
+
+#
+# Calculate defect count as sum by Day
 #
 wbook2 = pd.ExcelFile('data/inspection_results_and_defects_August_september.xlsx')
 sheet2 = wbook2.parse('Defects')
-cols2 = ['Date_Time','Defect code']
+cols2 = ['Date', 'NUM_DEFECTOS']
+df2 = pd.DataFrame(data=sheet2, columns = cols2)
+qry2 = "select Date, sum(NUM_DEFECTOS) from df2 group by Date"
+dfout2 = pysqldf(qry2)
+print(dfout2)
+dfout2['Date'] = dfout2['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
+dfout2.plot(x='Date', y='sum(NUM_DEFECTOS)')
+
+
+#
+# Join the two data frames
+#
+df_merged = pd.merge(dfout, dfout2, on='Date', how='inner')
+print(df_merged)
+
+#
+# Correlate betwen quantity and defects
+#
+df_merged['sum(Quantity)*5'].corr(df_merged['sum(NUM_DEFECTOS)'])
+df_merged.plot(x='Date')
+
+##
+# No clear correlation (r=.47) between defect count and waste
+##
 
 
 
 
 
-
-
-
-
-
-
-
-
-df2 = pd.DataFrame(data=sheet2, columns=cols2)
-print(df2)
-
-
-df3 = df2
-df3.dropna(subset=['Defect code'], inplace=True)
-print(df3)
-
-
-
-
+#
+# Calculate defect count as sum by Day
+#
+wbook3 = pd.ExcelFile('data/inspection_results_and_defects_August_september.xlsx')
+sheet3 = wbook3.parse('Inspection results')
+cols3 = ['Date', 'Val']
+df3 = pd.DataFrame(data=sheet3, columns = cols3)
 
 df4 = df3.copy()
-df4 = df4[df4['Defect code'] == '3C']
-print(df4)
+df4 = df4[df4['Val'] == 'R']
+df3 = df4.copy()
+
+qry3 = "select Date, count(Val)*100 from df3 group by Date"
+dfout3 = pysqldf(qry3)
+print(dfout3)
+dfout3['Date'] = dfout3['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
+dfout3.plot(x='Date', y='count(Val)*100')
 
 
-df4['Defect code'] = 1
-print(df4)
+#
+# Join the two data frames
+#
+df_merged2 = pd.merge(dfout2, dfout3, on='Date', how='inner')
+print(df_merged2)
 
-df4['Date_Time'] = df4['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m.%y %H:%M:%S"))
-df4.plot(x=cols2[0], y=cols2[1])
+#
+# Correlate betwen quantity and defects
+#
+df_merged2['sum(NUM_DEFECTOS)'].corr(df_merged2['count(Val)*100'])
+df_merged2.plot(x='Date')
+
+##
+# No clear correlation (r=.40) between defect count and R's
+##
+
+
+#
+# Put in the Waste as well
+#
+df_merged3 = pd.merge(df_merged2, dfout, on='Date', how='inner')
+print(df_merged3)
+
+## See Waste vs. Defects => Low Correlation (44%)
+df_merged3.plot(x='Date', y=['sum(Quantity)*5', 'sum(NUM_DEFECTOS)'])
+df_merged3['sum(Quantity)*5'].corr(df_merged2['sum(NUM_DEFECTOS)'])
+
+
+## See Waste vs. R => No Correlation (6%)
+df_merged3.plot(x='Date', y=['sum(Quantity)*5', 'count(Val)*100'])
+df_merged3['sum(Quantity)*5'].corr(df_merged2['count(Val)*100'])
+
+## See R vs Defects => Low Correlation (40%f)
+df_merged3.plot(x='Date', y=['sum(NUM_DEFECTOS)', 'count(Val)*100'])
+df_merged3['sum(NUM_DEFECTOS)'].corr(df_merged2['count(Val)*100'])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
