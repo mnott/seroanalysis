@@ -13,21 +13,11 @@ import matplotlib.pyplot as plt
 from pandasql import sqldf, load_meat, load_births
 pysqldf = lambda q: sqldf(q, globals())
 
-#
-# Plot the Waste produced
-#
-# Input: Wastes_August_september.xlsx
-#
-# Column Date_Time is concatenation of Date and Time
-# Column Quantity  is amount of waste discarded
-#
-wbook = pd.ExcelFile('data/Wastes_August_september_m.xlsx')
-sheet = wbook.parse('9000_E06')
-cols = ['Date', 'Quantity']
-df = pd.DataFrame(data=sheet, columns = cols)
-#print(df)
-df['Date_Time'] = df['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m.%y %H:%M:%S"))
-df.plot(x=cols[0], y=cols[1])
+########################################################################
+##
+## Look at Waste Produced, "R"-evisions, and Defect Counts
+##
+########################################################################
 
 
 #
@@ -37,11 +27,13 @@ wbook = pd.ExcelFile('data/Wastes_August_september_m.xlsx')
 sheet = wbook.parse('9000_E06')
 cols = ['Date', 'Quantity']
 df = pd.DataFrame(data=sheet, columns = cols)
-qry = "select Date, sum(Quantity)*5 from df group by Date"
+qry = "select Date, sum(Quantity)*5 as Waste from df group by Date"
 dfout = pysqldf(qry)
 print(df)
 dfout['Date'] = dfout['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
-dfout.plot(x='Date', y='sum(Quantity)*5')
+plot = dfout.plot(x='Date', y='Waste')
+plot.get_figure().savefig('data/01-waste-time.pdf', format='pdf')
+
 
 
 #
@@ -51,11 +43,12 @@ wbook2 = pd.ExcelFile('data/inspection_results_and_defects_August_september.xlsx
 sheet2 = wbook2.parse('Defects')
 cols2 = ['Date', 'NUM_DEFECTOS']
 df2 = pd.DataFrame(data=sheet2, columns = cols2)
-qry2 = "select Date, sum(NUM_DEFECTOS) from df2 group by Date"
+qry2 = "select Date, sum(NUM_DEFECTOS) as DefectCount from df2 group by Date"
 dfout2 = pysqldf(qry2)
 print(dfout2)
 dfout2['Date'] = dfout2['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
-dfout2.plot(x='Date', y='sum(NUM_DEFECTOS)')
+plot = dfout2.plot(x='Date', y='DefectCount')
+plot.get_figure().savefig('data/02-defects-time.pdf', format='pdf')
 
 
 #
@@ -65,17 +58,21 @@ df_merged = pd.merge(dfout, dfout2, on='Date', how='inner')
 print(df_merged)
 
 #
-# Correlate betwen quantity and defects
+# Correlate betwen quantity and defects: Moderate (47%)
 #
-df_merged['sum(Quantity)*5'].corr(df_merged['sum(NUM_DEFECTOS)'])
-df_merged.plot(x='Date')
-
-##
-# No clear correlation (r=.47) between defect count and waste
-##
-
-
-
+#
+# Correlation Coefficient          Descriptor
+#
+#   .90 - .99                      Near perfect
+#   .70 - .89                      Very strong
+#   .50 - .69                      Substantial
+#   .30 - .49                      Moderate
+#   .10 - .29                      Low
+#   .01 - .09                      Trivial
+#
+df_merged['Waste'].corr(df_merged['DefectCount']) # 47%
+plot = df_merged.plot(x='Date')
+plot.get_figure().savefig('data/03-waste-defects.pdf', format='pdf')
 
 
 #
@@ -90,11 +87,13 @@ df4 = df3.copy()
 df4 = df4[df4['Val'] == 'R']
 df3 = df4.copy()
 
-qry3 = "select Date, count(Val)*100 from df3 group by Date"
+qry3 = "select Date, count(Val)*100 as Revisions from df3 group by Date"
 dfout3 = pysqldf(qry3)
 print(dfout3)
 dfout3['Date'] = dfout3['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
-dfout3.plot(x='Date', y='count(Val)*100')
+plot = dfout3.plot(x='Date', y='Revisions')
+plot.get_figure().savefig('data/04-revisions-time.pdf', format='pdf')
+
 
 
 #
@@ -104,36 +103,74 @@ df_merged2 = pd.merge(dfout2, dfout3, on='Date', how='inner')
 print(df_merged2)
 
 #
-# Correlate betwen quantity and defects
-#
-df_merged2['sum(NUM_DEFECTOS)'].corr(df_merged2['count(Val)*100'])
-df_merged2.plot(x='Date')
-
-##
-# No clear correlation (r=.40) between defect count and R's
-##
-
-
-#
 # Put in the Waste as well
 #
 df_merged3 = pd.merge(df_merged2, dfout, on='Date', how='inner')
 print(df_merged3)
 
-## See Waste vs. Defects => Low Correlation (44%)
-df_merged3.plot(x='Date', y=['sum(Quantity)*5', 'sum(NUM_DEFECTOS)'])
-df_merged3['sum(Quantity)*5'].corr(df_merged2['sum(NUM_DEFECTOS)'])
+## See R vs Defects => Moderate Correlation (40%)
+df_merged3['DefectCount'].corr(df_merged3['Revisions'])
+plot = df_merged3.plot(x='Date', y=['DefectCount', 'Revisions'])
+plot.get_figure().savefig('data/05-defects-revisions-time.pdf', format='pdf')
+
+## See Waste vs. Defects => Moderate Correlation (44%)
+df_merged3['Waste'].corr(df_merged3['DefectCount'])
+plot = df_merged3.plot(x='Date', y=['Waste', 'DefectCount'])
+plot.get_figure().savefig('data/06-defects-waste-time.pdf', format='pdf')
 
 
-## See Waste vs. R => No Correlation (6%)
-df_merged3.plot(x='Date', y=['sum(Quantity)*5', 'count(Val)*100'])
-df_merged3['sum(Quantity)*5'].corr(df_merged2['count(Val)*100'])
-
-## See R vs Defects => Low Correlation (40%f)
-df_merged3.plot(x='Date', y=['sum(NUM_DEFECTOS)', 'count(Val)*100'])
-df_merged3['sum(NUM_DEFECTOS)'].corr(df_merged2['count(Val)*100'])
+## See Waste vs. R => Trivial Correlation (6%)
+df_merged3['Waste'].corr(df_merged3['Revisions'])
+plot = df_merged3.plot(x='Date', y=['Waste', 'Revisions'])
+plot.get_figure().savefig('data/07-waste-revisions-time.pdf', format='pdf')
 
 
+
+
+
+
+########################################################################
+##
+## Look at Features
+##
+########################################################################
+
+wbook4 = pd.ExcelFile('data/inspection_results_and_defects_August_september.xlsx')
+sheet4 = wbook4.parse('Inspection results')
+cols4 = ['Date', 'Feature', 'Media']
+df4 = pd.DataFrame(data=sheet4, columns = cols4)
+
+# Average over each day
+qry4 = "select Date, avg(Media)*200 as 'Temp' from df4 where Feature == 'TEMPERATURA SALA' and Media < 100 group by Date"
+dfout4 = pysqldf(qry4)
+print(dfout4)
+dfout4['Date'] = dfout4['Date'].map(lambda x: datetime.strptime(str(x), "%Y-%m-%d %H:%M:%S.%f"))
+plot = dfout4.plot(x='Date', y='Temp')
+plot.get_figure().savefig('data/10-temp-time.pdf', format='pdf')
+
+# Don't Average over each day
+cols5 = ['Date_Time', 'Feature', 'Media']
+df5 = pd.DataFrame(data=sheet4, columns = cols5)
+
+qry5 = "select Date_Time, Media as 'Temp' from df5 where Feature == 'TEMPERATURA SALA' and Media < 100"
+dfout5 = pysqldf(qry5)
+print(dfout5)
+dfout5['Date_Time'] = dfout5['Date_Time'].map(lambda x: datetime.strptime(str(x), "%d.%m.%y %H:%M:%S"))
+plot = dfout5.plot(x='Date_Time', y='Temp')
+plot.get_figure().savefig('data/11-temp-time.pdf', format='pdf')
+
+
+#
+# Correlate Defects and Temperature
+#
+df_merged4 = pd.merge(dfout4, dfout2, on='Date', how='inner')
+print(df_merged4)
+
+## See Temp vs Defects => low (18%)
+df_merged4['Temp'].corr(df_merged2['DefectCount'])
+plot = df_merged4.plot(x='Date', y=['Temp', 'DefectCount'])
+
+plot.get_figure().savefig('data/12-temp-defects-time.pdf', format='pdf')
 
 
 
