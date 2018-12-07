@@ -158,3 +158,78 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
     }
   }
 }
+
+#
+# Helper function for the corrplot
+#
+cor.mtest <- function(mat, ...) {
+  mat <- as.matrix(mat)
+  n <- ncol(mat)
+  p.mat<- matrix(NA, n, n)
+  diag(p.mat) <- 0
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      tmp <- cor.test(mat[, i], mat[, j], ...)
+      p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+    }
+  }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+
+
+#
+# Get a decent correlation plot
+#
+# Depends on: cor.mtest
+#             library(corrplot)
+#
+# df_top_features: The list of features that we want to correlate
+# df_reference   : The list of base values we want to correlate the features with (merged by "Date" column)
+# df_base        : The base results table where we find the feature values as "Mean" and their name as "Feature"
+# file           : The file name to dump the plot to as PDF (optional)
+# sig            : The cutoff significance level (default: .1)
+# size           : The size of the PDF, if any (default: 15)
+# returns        : The data frame on which the correlations were calculated; can be used for e.g. chart.Correlation(df)
+#
+library(corrplot)
+correlate <- function(df_top_features, df_reference, df_base, file = "", sig = .1, size = 15) {
+  df_wdrf <- df_reference
+  for (feature in df_top_features$feature) {
+    df_feature <- sqldf(sprintf("select Date, avg(Mean) as '%s' from df_base where Feature == '%s' group by Date", feature, feature))
+    df_wdrf <- merge(df_wdrf, df_feature, by = "Date")    
+  }
+  
+  df_wdrf$Date <- NULL
+  
+  par(mfrow=c(1,1))
+
+  if(file != "") {
+    pdf(file, width = size, height = size)
+  }
+  
+  # chart.Correlation(df_wdrf)
+  # instead, we do something nicer
+  
+  p.mat <- cor.mtest(df_wdrf)#$p
+  col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+  corrplot(cor(df_wdrf), 
+           method = "color", 
+           col = col(200),
+           type = "lower", 
+           #order = "hclust", 
+           number.cex = .7,
+           addCoef.col = "black", # Add coefficient of correlation
+           tl.col      = "black",
+           tl.srt = 35,   # Text label color and rotation
+           p.mat = p.mat, # Combine with significance
+           sig.level = sig, insig = "blank", 
+           # hide correlation coefficient on the principal diagonal
+           diag = T)
+  
+  if(file != "") {
+    dev.off()
+  }
+  
+  return(df_wdrf)  
+}
