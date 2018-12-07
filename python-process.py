@@ -38,7 +38,7 @@ df = parseDateTime(df, 'Date', "%Y-%m-%d %H:%M:%S.%f")
 # print(df)
 
 plot = df.plot(x='Date', y='Waste')
-asPDF(plot, 'data/01-waste-time.pdf')
+asPDF(plot, 'data/output/python/01-waste-time.pdf')
 
 
 ########################################################################
@@ -51,7 +51,7 @@ df2 = parseDateTime(df2, 'Date', "%Y-%m-%d %H:%M:%S.%f")
 # print(df2)
 
 plot = df2.plot(x='Date', y='DefectCount')
-asPDF(plot, 'data/02-defects-time.pdf')
+asPDF(plot, 'data/output/python/02-defects-time.pdf')
 
 #
 # Correlate between Waste and Defect Count
@@ -71,7 +71,7 @@ print(df_waste_defects)
 #
 df_waste_defects['Waste'].corr(df_waste_defects['DefectCount']) # 47%
 plot = df_waste_defects.plot(x='Date')
-asPDF(plot, 'data/03-waste-defects.pdf')
+asPDF(plot, 'data/output/python/03-waste-defects.pdf')
 
 
 ########################################################################
@@ -84,7 +84,7 @@ df_revisions = queryDataFrame(ff_results, "select Date, count(Val)*100 as Revisi
 df_revisions = parseDateTime(df_revisions, 'Date', "%Y-%m-%d %H:%M:%S.%f")
 
 plot = df_revisions.plot(x='Date', y='Revisions')
-asPDF(plot, 'data/04-revisions-time.pdf')
+asPDF(plot, 'data/output/python/04-revisions-time.pdf')
 
 
 ########################################################################
@@ -97,17 +97,17 @@ df_merged = pd.merge(df_waste_defects, df_revisions, on='Date', how='inner')
 ## See R vs Defects => Moderate Correlation (40%)
 df_merged['DefectCount'].corr(df_merged['Revisions'])
 plot = df_merged.plot(x='Date', y=['DefectCount', 'Revisions'])
-asPDF(plot, 'data/05-defects-revisions-time.pdf')
+asPDF(plot, 'data/output/python/05-defects-revisions-time.pdf')
 
 ## See Waste vs. Defects => Moderate Correlation (44%)
 df_merged['Waste'].corr(df_merged['DefectCount'])
 plot = df_merged.plot(x='Date', y=['Waste', 'DefectCount'])
-asPDF(plot, 'data/06-defects-waste-time.pdf')
+asPDF(plot, 'data/output/python/06-defects-waste-time.pdf')
 
 ## See Waste vs. R => Trivial Correlation (6%)
 df_merged['Waste'].corr(df_merged['Revisions'])
 plot = df_merged.plot(x='Date', y=['Waste', 'Revisions'])
-asPDF(plot, 'data/07-waste-revisions-time.pdf')
+asPDF(plot, 'data/output/python/07-waste-revisions-time.pdf')
 
 
 ########################################################################
@@ -121,12 +121,12 @@ df_temp = queryDataFrame(ff_results, "select Date, avg(Media) as 'Temp' from df 
 df_temp = parseDateTime(df_temp, 'Date', "%Y-%m-%d %H:%M:%S.%f")
 
 plot = df_temp.plot(x='Date', y='Temp')
-asPDF(plot, 'data/10-temp-time.pdf')
+asPDF(plot, 'data/output/python/10-temp-time.pdf')
 
 # Don't Average over each day
 df_temp_all = queryDataFrame(ff_results, "select Date_Time, Media as 'Temp' from df where Feature == 'TEMPERATURA SALA' and Media < 100")
 plot = df_temp_all.plot(x='Date_Time', y='Temp')
-asPDF(plot, 'data/11-temp-time.pdf')
+asPDF(plot, 'data/output/python/11-temp-time.pdf')
 
 #
 # Scale Average Temperature
@@ -144,17 +144,17 @@ df_merged = pd.merge(df_merged, df_temp_scaled, on='Date', how='inner')
 ## Correlate Temp vs Defects
 df_merged['Temp'].corr(df_merged['DefectCount']) # 34%
 plot = df_merged.plot(x='Date', y=['Temp', 'DefectCount'])
-asPDF(plot, 'data/12-temp-defects-time.pdf')
+asPDF(plot, 'data/output/python/12-temp-defects-time.pdf')
 
 ## Correlate Temp vs Waste
 df_merged['Temp'].corr(df_merged['Waste']) # 19%
 plot = df_merged.plot(x='Date', y=['Temp', 'Waste'])
-asPDF(plot, 'data/13-temp-waste-time.pdf')
+asPDF(plot, 'data/output/python/13-temp-waste-time.pdf')
 
 ## Correlate Temp vs Revisions
 df_merged['Temp'].corr(df_merged['Revisions']) # 28%
 plot = df_merged.plot(x='Date', y=['Temp', 'Revisions'])
-asPDF(plot, 'data/14-temp-revisions-time.pdf')
+asPDF(plot, 'data/output/python/14-temp-revisions-time.pdf')
 
 
 
