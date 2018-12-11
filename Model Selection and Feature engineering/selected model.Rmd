@@ -1,0 +1,231 @@
+---
+title: "The best performing prediction model"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+##Executive summary  
+This model is the culmination of our efforts to build a reliable prediction model. It includes the many techniques described in other .Rmd files plus expert tuning of parameters. This document is focused on the selected model's performance.
+
+##Building the prediction model
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T,message = FALSE,warning = FALSE)
+```
+
+```{r, echo=FALSE}
+#loading requsite libraries
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(ade4)
+library(calibrate)
+```
+
+
+```{r, echo=FALSE}
+###Function to Calculate RMSE
+calculate_error <- function(a,b){
+  return (mean(sqrt((a-b)^2)))
+}
+
+```
+
+
+```{r, echo=FALSE}
+###Function to Mark as failure if value > Theshold
+mark_failure <- function(x){
+  if(x>11){
+    return (1)
+  }else{
+    return (0)
+  }
+}
+```
+
+ 
+```{r, echo=FALSE}
+###Reading in data
+data <- read.csv("After Removing Missing Values.csv")
+data <- dplyr::select(data,-c(X,RangeFDBK,date,time))
+failures<-ifelse(data$DevFDBK>11,"Failure","Normal")
+```
+
+
+```{r, echo=FALSE}
+###Removing low Variance variables
+data <- data[-nearZeroVar(data)]
+```
+
+
+```{r, echo=FALSE}
+###Removing Outliers
+data1<-data
+data=data[data['DevFDBK']<=19,]
+devFDBK<- data['DevFDBK']
+
+```
+
+
+```{r, echo=FALSE}
+### One Hot Encoding the factor variables
+
+#identifying the variables whose values are candidates for one hot encoding 
+names=c("MaxtoneramountUseradjustmentvalueY","MaxtoneramountUseradjustmentvalueC","MaxtoneramountUseradjustmentvalueK")
+
+#here we are identifying the index of the column of interest in the source data frame
+ind=c()
+j=1;
+for (i in names){
+  
+  if(i %in% colnames(data)){
+    
+    ind[j]=(which(colnames(data)==i))
+  }
+   j=j+1
+}
+
+#scaling other data and adding back the outcome
+data=as.data.frame(scale(data[,-ind]))
+data['DevFDBK'] <- devFDBK
+
+#appending the variables of interest, as identified above
+data[names]<-data1[ind]
+for (i in names){
+  
+  data[i]<- as.factor(unlist(data[i]))
+}
+
+#make sure that the ade4 package is installed so one hot encoding can be performed
+for (i in names){
+  df_all_dummy = acm.disjonctif(data[i])
+  data[i] = NULL
+  data= cbind(data, df_all_dummy)
+}
+
+#regex to rename columns for further processing
+colnames(data) <-gsub("\\.", "dot", colnames(data))
+colnames(data) <-gsub("-", "minus", colnames(data))
+
+```
+
+
+
+```{r, echo=FALSE}
+### Train Test Data Split 
+data1<-data
+data_failure<-sapply(data1$DevFDBK,mark_failure)
+data1$DevFDBK <- data_failure
+
+set.seed(1)
+train <-createDataPartition(y=data$DevFDBK,p=0.80,list=FALSE)
+trainData <- data[train,]
+testData <- data[-train,]
+```
+
+###Model training  
+This model is trained with a set of predictors determined using statistical techniques and expert tuning. This model includes a couple of important concepts with respect to polynomial and interaction terms. Polynomials (and other similar modifications) help fit non linear relationships. Interaction terms help address confounding, when one variable distorts the relationship between between two others.  
+```{r}
+
+modelSelected<- lm(DevFDBK~poly(IDCsensor1frontLEDlightquantity,2)
+              +MaxtoneramountUseradjustmentvalueCdot1
+              +DevelopingDCbiasvoltageM
+              +ElectricpotentialsensorchargingvoltageV0Y1speed
+              +IDCsensor1frontLEDlightquantity:MaxtoneramountUseradjustmentvalueCdot1
+              ,data=trainData)
+options(width = 200)
+summary(modelSelected)
+```
+
+###Prediction  
+Now we predict for test data using the model trained above.
+```{r}
+prediction=as.data.frame(predict(modelSelected, testData))
+colnames(prediction) <-c("prediction")
+prediction_failure <-sapply(prediction$prediction,mark_failure)
+test_failure<-sapply(testData$DevFDBK,mark_failure)
+```
+
+
+```{r, echo=FALSE}
+###Confusion Matrix
+conMat <- confusionMatrix(prediction_failure,test_failure,positive = '1')
+specificity <- round(conMat$byClass[[2]],2)
+sensitivity <- round(conMat$byClass[[1]],2)
+recall <- sensitivity
+precision <- round(conMat$byClass[[3]],2)
+FMeasure <- round(2*((precision*recall)/(precision+recall)),2)
+accuracy <- round(conMat$overall[[1]],2)
+```
+
+
+```{r, echo=FALSE}
+###RMSE of the Model
+rmse <- round(calculate_error(predict(modelSelected, testData),testData$DevFDBK),2)
+```
+
+
+###Plot Actual and Predicted values  
+This graph displays how closely the prediction matches the actual test data values.
+```{r, echo=F}
+
+resultComp<-as.data.frame(testData$DevFDBK)
+colnames(resultComp)=c("actual")
+resultComp['predicted']<-prediction
+par(mar=c(5.1,4.1,4.1,1.1))
+plot(predict(modelSelected, testData),pch=20,ylab=c("DevFDBK"), type = "l")
+lines(testData$DevFDBK,col="green")
+legend("topright",pch=20,col=c("black","green"),c("Actual","Predicted"), ncol = 1,cex = 0.5,pt.cex = 1.5)
+abline(h=11, col='red')
+title("Actual Vs Predicted")
+
+```
+
+###Key metrics  
+The model's performance can be measured using several metrics that help us understand different aspects of performance.  
+  
+    
+
+   
+Metric                              | Value  
+------------------------------------|------  
+Accuracy                            | `r accuracy`  
+F-Measure                           | `r FMeasure`  
+RMSE (Root Mean Square Error)       | `r rmse`  
+Adjusted R Squared in %             | `r round(summary(modelSelected)$adj.r.squared*100,2)`  
+
+  
+The model trained is a linear regression model that predicts the value of continous variables. RMSE and Ajusted R Squared can be used for regression model performance measurement. In addition, since it appeared like KM was more familiar with Accuracy and F-Measure, we have also transformed predictions into failure/ non-failure by using the "DevFDBK>11 is a defect" criterion. That is how, we are also reporting Accuracy and F-Measure.
+
+Accuracy is the ratio of times when the predicted and actual values matched to the total number of predictions. The maximum value is 1.    
+    
+F-Measure is a combination of Precision (TP/(TP+FP)) and Recall (TP/(TP+FN)). Both can take a maximum value of 1. Precision penalizes for incorrectly predicting a good reading as defective. Recall penalizes for not predicting a defect when there is actually one.  
+
+RMSE measures the difference between the predicted and actuals values. This is further mathematically transformed to make it easy to use in different settings.  
+  
+"Adjusted R Squared" is a derived measure of the portion of variability in the outcome that is explained by the model. Maximum is 100%.    
+  
+
+###Caution
+The techniques used to create this prediction model, like the final selection of a particular predictors and the use of polynomial terms, carry the risk of overfitting. This is less of a problem with larger datasets. However, in this case, the model has shortcomings that are best explained using the graphs below.  
+```{r}
+par(mfrow=c(2,2))
+plot(modelSelected)
+```  
+  
+###Residuals vs Fitted   
+Residuals are the difference between the actual value of DevFDBK and the value predicted by the model. Fitted is just another name for predicted value. The RMSE metric above measures the size of the residuals. Smaller is better. RMSE is to be used in conjunction with the Residuals vs Fitted plot. In an ideal case, the red line on the plot should be a horizontal line at zero. While it usually is a little wavy in practice, this particular plot shows a pattern. Predicted values for DevFDBK values below 12 are higher than actuals. A possible cause for this is the data provided, in which only 22% of the DevFDBK values are below 11 (non-failure condition). The model does not appear to be learning the non-failure condition well.  
+  
+###Normal Q-Q  
+This is another check for patterns in residual values. They should be normally distributed around a mean of zero. We check if the data points appear along the diagonal-like line in the Normal Q-Q plot. But we see that the data points are off at at the two ends. Another indicator of undesirable patterns to residuals.       
+  
+###Scale - Location  
+The Scale-Location plot is similar to the Residuals v/s Fitted plot except that the value on the Y-axis has been mathematically transformed. First by dividing each residual by the standard deviation of all the residuals. Then, taking the square root. We gather no new information here.    
+  
+###Residuals vs Leverage  
+This plot is OK and shows that there are no high influence (measured by Cook's distance) points. This issue was addressed in data pre-processing, when outliers were removed.  
+
+##Conclusion  
+Within the contraints of the limited dataset available (176 observations), we have built a starter prediction model that has learnt quite a bit about patterns of defects. There is scope to improve the model, by feeding it more more observations and retuning the same.  
+

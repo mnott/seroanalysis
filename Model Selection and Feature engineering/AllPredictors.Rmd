@@ -1,0 +1,89 @@
+---
+title: "Prediction model using all predictors in the dataset"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+The full dataset from Manufacturing data contained 211 columns. First, the columns in the dataset is trimmed, where needed. Second, the prediction model is trained. Third and last, the performance of the prediction model is checked. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#loading required libraries
+library(caret)
+library(dplyr)
+```
+##Dataset trimming  
+The need for dataset pre-processing is explained in a separate "R markdown document". This portion of the code executes the plan discussed there. 
+```{r}
+#reading in data
+data <- read.csv("After Removing Missing Values.csv")
+
+#removing predictors that are not affecting the outcome
+lowVar <- nearZeroVar(data)
+datalowVar <- data[nearZeroVar(data)]
+data <-data[-nearZeroVar(data)]
+#dim(datalowVar)[2]
+```
+The number of columns that had low variance and hence are to be eliminated is `r dim(datalowVar)[2]`.
+
+```{r}
+#we intend to predict the value to DevFDBK. So, we need to remove this in the following correlation check step. We save a copy of DevFDBK for later use.
+DevFDBK <- data$DevFDBK
+
+#removing columns that we think are not to be used as predictors for DevFDBK. We also remove DevFDBK so we do not eliminate the very predictors we are most interested in.
+data <- select(data,-c(RangeFDBK,date,X,time,DevFDBK ))
+
+#finding and removing correlated data that add noise and reduce model performance.
+corData <- cor(data,use="complete.obs")
+highlyCorData <- findCorrelation(corData, 0.90, names = F)
+lowCorData <- data[,-highlyCorData]
+highCorData <- data[,highlyCorData]
+#dim(highCorData)[2]
+#dim(lowCorData)[2]
+```
+The number of columns that had high correlation and hence are to be eliminated is `r dim(highCorData)[2]`. That leaves `r dim(lowCorData)[2]` statistically viable predictors in the dataset to train a prediction model on.  
+Next, we merge columns and separate data into training and test sets.  
+```{r}
+#adding back the DevFDBK column from the saved copy 
+data <- cbind(lowCorData,DevFDBK)
+
+#splitting the given dataset into separate sets to train and test on
+set.seed(93629)
+intrain <-createDataPartition(y=data$DevFDBK,p=0.7,list=FALSE)
+datatrain <- data[intrain,]
+datatest <- data[-intrain,]
+```
+
+##Model training  
+Now we train the model to predict the value of DevFDBK.  
+```{r}
+all.train <- lm(datatrain$DevFDBK~., data = datatrain)
+```
+
+##Model performance check  
+The key parameters of the trained model are shown below.  
+```{r}
+options(width = 200)
+summary(all.train)
+```
+While several predictors appear to be statistically significant (see asterisks/ dots next to the Pr(>|t|) column), this model as a whole explains only `r round(summary(all.train)$adj.r.squared*100,2)`% of the variability in the outcome, (Note: This is the Adjusted R-Squared metric shown in the output above, converted to percentage).  
+
+##Predicting for the test data  
+Predicting for the test data and calculating RMSE (Root Mean Square Error)  
+```{r}
+pred.all <- predict(all.train,datatest)
+RMSE.test.all <- round(sqrt(mean(( pred.all - datatest$DevFDBK)^2)),2)
+
+```
+
+##Conclusion  
+Here are the key performance measures  
+  
+  
+Metric                              | Value
+------------------------------------|------
+RMSE (test data)                    | `r RMSE.test.all`
+------------------------------------|------
+Adjusted R Squared in % (train data)| `r round(summary(all.train)$adj.r.squared*100,2)`
+------------------------------------|------

@@ -1,0 +1,280 @@
+---
+title: "Failure prediction using decision trees"
+output:
+  html_document: default
+  word_document: default
+---
+
+##Executive Summary  
+Decision trees, when combined with intelligent aggregation techniques like random forest, can make predictions with satisfactory accuracy. This option has been explored for comparison with linear regression as a part of the algorithm selection step. Decision trees are better at identifying relationships between predictors and outcome (defects) that are non-linear and complex.  
+  
+We explore the following approaches,  
+* Bagging  
+* Random forest  
+* Boosting  
+* Decision trees, regression  
+* Decision trees, classification  
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#Common data read and preprocessing
+#Here are the libraries used
+library(dplyr)
+library(caret)
+library(randomForest)
+library(gbm)
+library(tree)
+library(e1071)
+```
+
+##Bagging (bootstrap aggregation): 
+About 2/3rds of the observations are randomly and repeatedly drawn from the total set of observations available. A separate decision tree is fit on each such sample. The predictions from each of the decision trees is averaged. The prediction from each tree is based on the 1/3rd of the data that was not used to train that specific tree.  
+As seen below, all 40 predictors are being used and 500 trees have been constructed. The graph shows the presence of outliers which are affecting predictions to the point where the model does not explain the variability in the outcome (See "% Var explained").<BALA: check "Error: attempt to use zero-length variable name">
+```{r}
+#Data load and preprocessing
+data <- read.csv("After Removing Missing Values.csv")
+attach(data)
+data <- select(data,-c(X,RangeFDBK, date, time))
+data <- data[-nearZeroVar(data)]
+cor <-cor(data,use="complete.obs")
+highCorData <- findCorrelation(cor, 0.98, names = F)
+data <- data[,-highCorData]
+DevFDBK <- data$DevFDBK
+data <- as.data.frame(scale(data))
+data$DevFDBK <- DevFDBK
+set.seed(287)
+train <- sample(1:nrow(data), 140)
+KMFP.test <- data[-train,"DevFDBK"]
+```
+
+```{r}
+#training the bagging model. Please note that the random forest function is used for bagging as well, with the special condition that all predictors are included. This will become clear in the next section where random forest and its similarity to bagging is explained.
+set.seed(123)
+bag.KMFP <- randomForest(DevFDBK~., data = data, subset = train, mtry = 40, importance=TRUE)
+bag.KMFP
+bag1VarExpl <- round(bag.KMFP$rsq[length(bag.KMFP$rsq)]*100, 2)
+#predictions
+yhat.bag <- predict(bag.KMFP, newdata = data[-train,])
+plot(yhat.bag, KMFP.test, main = "Bagging", xlab = "Prediction", ylab = "Test data")
+abline(0,1)
+#MSE.bag1 <- mean((yhat.bag-KMFP.test)^2)
+#MSE.bag1
+RMSE.bag1 <- round(sqrt(mean((yhat.bag-KMFP.test)^2)),2)
+
+```
+
+
+Eliminating outliers (manually estimated to be where the value of DevDFDB > 19) from all the observations, we get a much improved model, as measured by the variance explained.
+
+```{r, echo=FALSE}
+#Data preprocessing with outlier removal
+data <- read.csv("After Removing Missing Values.csv")
+data <- select(data,-c(X,RangeFDBK, date, time))
+data <- data[data['DevFDBK']<=19,]
+data <- data[-nearZeroVar(data)]
+cor <-cor(data,use="complete.obs")
+highCorData <- findCorrelation(cor, 0.98, names = F)
+data <- data[,-highCorData]
+DevFDBK <- data$DevFDBK
+data <- as.data.frame(scale(data))
+data$DevFDBK <- DevFDBK
+train <- sample(1:nrow(data), 140)
+KMFP.test <- data[-train,"DevFDBK"]
+
+#Master data copies creation
+dataMaster <- data
+trainMaster <- train
+KMFP.testMaster <- KMFP.test
+```
+
+````{r}
+#retraining the bagging model
+set.seed(123)
+bag.KMFP <- randomForest(DevFDBK~., data = data, subset = train, mtry = 40, importance=TRUE)
+bag.KMFP
+bag2VarExpl <- round(bag.KMFP$rsq[length(bag.KMFP$rsq)]*100, 2)
+#predictions
+yhat.bag <- predict(bag.KMFP, newdata = data[-train,])
+plot(yhat.bag, KMFP.test, main = "Bagging, outliers removed", xlab = "Prediction", ylab = "Test data")
+abline(0,1)
+#MSE.bag2 <- mean((yhat.bag-KMFP.test)^2)
+#MSE.bag2
+RMSE.bag2 <- round(sqrt(mean((yhat.bag-KMFP.test)^2)),2)
+```
+
+The plot below shows the impact of each predictor on a key measure of model performance, increase in the mean square error (MSE). The more important a predictor is, the greater its impact. When an important predictor is removed, it causes a greater increase in MSE. The plot below shows predictors by decreasing order of impact on MSE.
+```{r, fig.width=10, fig.height=15}
+varImpPlot(bag.KMFP, type = 1)
+```
+
+##Random forest: 
+This is an extension of bagging. It seeks to eliminate correlation amongst the trees, which occurs in the presence of one/ few strong predictors in every tree. This is done by randomly picking a subset of predictors. By custom, the number of predictors selected for regression is 1/3rd of the total number of predictors.
+
+
+````{r}
+#using master data copies
+data <- dataMaster
+train <- trainMaster
+KMFP.test <-KMFP.testMaster
+
+#training the RF model
+set.seed(3)
+rf.KMFP <- randomForest(DevFDBK~., data = data, subset = train,  importance=TRUE, mtry =13)
+rf.KMFP
+rfVarExpl <- round(rf.KMFP$rsq[length(rf.KMFP$rsq)]*100, 2)
+#predictions
+yhat.rf <- predict(rf.KMFP, newdata = data[-train,])
+plot(yhat.rf, KMFP.test, main = "Random forest, outliers removed", xlab = "Prediction", ylab = "Test data")
+abline(0,1)
+#MSE.rf <- mean((yhat.rf-KMFP.test)^2)
+#MSE.rf
+RMSE.rf <- round(sqrt(mean((yhat.rf-KMFP.test)^2)),2)
+```
+The predictor importance plot, sorted in descending order of impact on MSE is shown below. 
+```{r, fig.width=10, fig.height=15}
+varImpPlot(rf.KMFP, type = 1)
+```
+
+##Boosting: 
+This is a slow learning algorithm (desirable) where the trees are grown sequentially. Each tree is fit on current residuals (not the outcome), thus leading to an update to residuals. Key tuning parameters: Number of trees, tree depth and shrinkage parameter (lambda).
+
+```{r}
+#using master data copies
+data <- dataMaster
+train <- trainMaster
+KMFP.test <-KMFP.testMaster
+
+#training the boosting model
+set.seed(321)
+boost.KMFP <- gbm(DevFDBK~., data = data[train,], distribution = "gaussian", n.trees = 200, interaction.depth = 4, shrinkage = 0.01, verbose = F)
+boost.KMFP
+#summary(boost.KMFP)
+
+yhat.boost <- predict(boost.KMFP, newdata = data[-train,], n.trees = 200)
+plot(yhat.boost, KMFP.test, main = "Boosting, outliers removed", xlab = "Prediction", ylab = "Test data")
+abline(0,1)
+#MSE.boost <- mean((yhat.boost-KMFP.test)^2)
+#MSE.boost
+RMSE.boost <- round(sqrt(mean((yhat.boost-KMFP.test)^2)),2)
+```
+
+##Decision trees, regression: 
+A decision tree is a simple algorithm that segments the predictor space into regions. The predicted value for test data is the mean outcome value for all training observations that fall into the same region. To prevent overfitting, the tree is pruned using a cost complexity parameter (k) and using cross validation to pick the optimal size (# of nodes) of the tree.
+
+
+```{r}
+#using master data copies
+data <- dataMaster
+train <- trainMaster
+KMFP.test <-KMFP.testMaster
+
+#training the regression decision tree
+tree.KMFP <- tree(DevFDBK~.,data, subset = train)
+summary(tree.KMFP)
+```
+
+We first plot the full tree, with all the nodes picked by the random forest algorithm.
+```{r, fig.width=13, fig.height=11.6}
+par(mfrow = c(1,1))
+plot(tree.KMFP)
+text(tree.KMFP, pretty = 0)
+```
+
+Next, we use cross validation to identify the best size of the tree. This is determined by the lowest value of "dev" for different sizes (# of nodes) of the tree.
+```{r}
+cv.KMFP <- cv.tree(tree.KMFP)
+plot(cv.KMFP$size,cv.KMFP$dev,type='b')
+
+#pruned to 7 nodes becuase that appeared to be best per the plot of size v/s dev. This could vary on future runs.
+prune.KMFP <- prune.tree(tree.KMFP, best = 4)
+plot(prune.KMFP)
+text(prune.KMFP, pretty = 0)
+
+yhat <- predict(tree.KMFP, newdata = data[-train,])
+KMFP.test <- data[-train,"DevFDBK"]
+plot(yhat, KMFP.test, main = "Decision trees, regression, outliers removed", xlab = "Prediction", ylab = "Test data")
+abline(0,1)
+#MSE.dt <- mean((yhat-KMFP.test)^2)
+#MSE.dt
+RMSE.dt <- round(sqrt(mean((yhat-KMFP.test)^2)),2)
+```
+
+
+
+##Decision trees, classification: 
+While this is like a regression tree, the predicted value for test data is the most commonly occurring class for all training observations that fall into the same region. Per prior discussions, DevFDBK > 11 was to be classified as a failure. This has been applied below 
+
+
+```{r}
+#using master data copies
+data <- dataMaster
+train <- trainMaster
+KMFP.test <-KMFP.testMaster
+
+#transforming continuous variable/ values into two classes for the classifier
+High <- ifelse(data$DevFDBK <= 11, "No", "Yes")
+data <- data.frame(data,High)
+set.seed(555)
+train <- sample(1:nrow(data), 140)
+KMFP.test <- data[-train,]
+High.test <- High[-train]
+tree.KMFP <- tree(High~.-DevFDBK, data, subset = train)
+tree.pred <- predict(tree.KMFP, KMFP.test, type = "class")
+conMatFull <- confusionMatrix(table(tree.pred, High.test))
+SpecFull <- round(conMatFull$byClass[[2]],2)
+SensFull <- round(conMatFull$byClass[[1]],2)
+RecFull <- SensFull
+PrecFull <- round(conMatFull$byClass[[3]],2)
+FMeasFull <- round(2*((PrecFull*RecFull)/(PrecFull+RecFull)),2)
+accFull <- round(conMatFull$overall[[1]],2)
+
+set.seed(876)
+cv.KMFP <- cv.tree(tree.KMFP, FUN = prune.misclass)
+#names(cv.KMFP)
+cv.KMFP
+
+par(mfrow =c(1,2))
+plot(cv.KMFP$size ,cv.KMFP$dev ,type="b")
+plot(cv.KMFP$k ,cv.KMFP$dev ,type="b")
+```
+
+```{r, fig.width=13, fig.height=11.6}
+prune.KMFP =prune.misclass (tree.KMFP ,best =7)
+par(mfrow =c(1,1))
+plot(prune.KMFP )
+text(prune.KMFP ,pretty =0)
+
+tree.pred <- predict(prune.KMFP, KMFP.test, type = "class")
+conMatPrune <- confusionMatrix(table(tree.pred, High.test))
+SpecPrune <- round(conMatPrune$byClass[[2]],2)
+SensPrune <- round(conMatPrune$byClass[[1]],2)
+RecPrune <- SensPrune
+PrecPrune <- round(conMatPrune$byClass[[3]],2)
+FMeasPrune <- round(2*((PrecPrune*RecPrune)/(PrecPrune+RecPrune)),2)
+accPrune <- round(conMatPrune$overall[[1]],2)
+```
+  
+##Conclusion  
+The results across all of the above models are summarized below. When compared to the Linear Regression model finally selected, decision trees did not perform as well. Nonetheless, we should revisit this family of algorithms when we obtain more data, when they will be able to learn and predict better.. Also, it is seen that removing outliers drastically improves model performance. Outlier removal and the other attempts with different algorithms show the potential to build a high performance model with more data.    
+
+
+Model                                     | Adj R^2 in %    | RMSE                 | Accuracy     | F-Measure  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Bagging                                   |`r bag1VarExpl`  |`r RMSE.bag1`         | N/A          | N/A  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Bagging, outliers removed                 |`r bag2VarExpl`  |`r RMSE.bag2`         | N/A          | N/A  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Random forest, outliers removed           |`r rfVarExpl`    |`r RMSE.rf`           | N/A          | N/A  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Boosting                                  |N/A              |`r RMSE.boost`        | N/A          | N/A  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Decision tree, regression                 |N/A              |`r RMSE.dt`           | N/A          | N/A  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Decision tree, classification             |N/A              |N/A                   | `r accFull`  |`r FMeasFull`  
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+Decision tree, classification, pruned     |N/A              |N/A                   | `r accPrune` |`r FMeasPrune`   
+------------------------------------------|-----------------|----------------------|--------------|--------------  
+
+
+

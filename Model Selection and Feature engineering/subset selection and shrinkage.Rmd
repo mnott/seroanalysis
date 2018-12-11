@@ -1,0 +1,255 @@
+---
+title: "Subset selection and shrinkage"
+
+output: html_document 
+---
+##Executive summary
+Including the right variables as predictors in a model is critical to its performance. One approach is to use statistical techniques to test different models, each with different combinations of variables. Then the model, and thus the combination of variables, with the best performance is picked. A second approach is to change the values of the coefficients of varibales such that impact of irrelevant variables is minimized. The techniques used are listed below. 
+
+
+*  Best subset selection  
+*  Stepwise selection  
+    +  Forward  
+    +  Backward  
+    +  Hybrid  
+*  Shrinkage 
+    +  Ridge  
+    +  Lasso 
+  
+
+
+##Best subset selection  
+Here we try to identify the subset of predictors that lead to superior measurements of prediction accuracy. This is done by fitting a least squares regression model for each possible combination of predictors. Several standard optimizations to make this computationally feasible are included.  
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#loading required libraries
+library(xlsx)
+library(caret)
+library(dplyr)
+library(leaps)
+library (glmnet)
+```
+
+```{r}
+#reading data
+data <- read.csv("After Removing Missing Values.csv")
+#creating a copy of the raw data
+dataRaw <- data
+#removing unrelated variables, as judged manually
+data <- select(data,-c(X,RangeFDBK, date, time))
+#removing outliers
+data <- data[data['DevFDBK']<=19,]
+#removing low variance variables
+data <- data[-nearZeroVar(data)]
+#removing highly correlated variables
+cor <-cor(data,use="complete.obs")
+highCorData <- findCorrelation(cor, 0.98, names = F)
+data <- data[,-highCorData]
+#scaling
+DevFDBK <- data$DevFDBK
+data <- as.data.frame(scale(data))
+data$DevFDBK <- DevFDBK
+
+#separating train and test data
+# set.seed(1234)
+# train <-createDataPartition(y=data$DevFDBK,p=0.8,list=FALSE)
+# trainData <- data[train,]
+# testData <- data[-train,]
+
+#model training using best subset selection
+regfit.full.KM=regsubsets (DevFDBK~.,data=data ,nvmax =41)
+reg.summary.KM =summary (regfit.full.KM)
+
+
+#identifying the model with the best combination of predictors
+which.max (reg.summary.KM$adjr2)
+#graph showing why the chosen model is the best
+plot(reg.summary.KM$adjr2 ,xlab =" Number of Variables ", ylab=" Adjusted RSq",type="l")
+points (18, reg.summary.KM$adjr2[18], col ="red",cex =2, pch =20)
+namesAdjR2 <- names(coef(regfit.full.KM ,18))
+#namesAdjR2
+adjR.subset <- round(reg.summary.KM$adjr2[18]*100,2)
+RMSE.subset <- round(sqrt((reg.summary.KM$rss[18])/nrow(data)),2)
+
+#one can use other measures of model fit like Cp and BIC. The code has been written and will be used when needed. But these have not been run here.
+# which.min (reg.summary.KM$cp )
+# plot(reg.summary.KM$cp ,xlab =" Number of Variables ",ylab="Cp",type="l")
+# points (15, reg.summary.KM$cp [15], col ="red",cex =2, pch =20)
+# namesCp <- names(coef(regfit.full.KM ,15))
+# 
+# which.min (reg.summary.KM$bic )
+# plot(reg.summary.KM$bic ,xlab=" Number of Variables ",ylab=" BIC",type="l")
+# points (2, reg.summary.KM$bic [2], col =" red",cex =2, pch =20)
+# namesBIC <- names(coef(regfit.full.KM ,2))
+# 
+# coef(regfit.full.KM ,2)
+# names(coef(regfit.full.KM ,23))
+# 
+# plot(regfit.full.KM ,scale ="r2")
+# plot(regfit.full.KM ,scale ="adjr2")
+# plot(regfit.full.KM ,scale ="Cp")
+# plot(regfit.full.KM ,scale ="bic")
+
+```
+
+##Stepwise selection  
+Despite optimizations, subset selection is infeasible when there are a large number of variables. Plus it is very susceptible to overfitting. Stepwise selection seeks to address these problem by restricting the number of models assessed. Within this, there are three subtypes,  
+  
+###Forward selection  
+In this approach, we begin with no predictors and then keep adding one best predictor at each iteration, while retaining the previously selected predictors.  
+  
+###Backward selection  
+In backward selection, we begin with all predictors in the model. We remove the least useful predictor, one at a time, in each iteration.  
+  
+###Hybrid  
+There are hybrid approaches that combine forward and backward selection. In these, while one new variable is added at each step, any existing variables that are not improving model fit are removed.  
+
+###Note  
+The above techniques are selecting the best model by measuring error on the same dataset that the model was trained on (training set error). An alternate approach typically used With larger datasets, is to use simple train and test datasets or cross validation. 
+```{r}
+#forward selection
+regfit.fwd.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="forward")
+summaryRegsubsetsFwd <- summary (regfit.fwd.KM )
+#finding the model with the best Adjusted R Squared value
+which.max(summaryRegsubsetsFwd$adjr2)
+
+#the command below would list out the predictors in the model with the best Adjusted R Squared value but is not called here
+#names(coef(regfit.fwd.KM ,19))
+adjR.forward <- round(summaryRegsubsetsFwd$adjr2[19]*100,2)
+RMSE.fwd <- round(sqrt(summaryRegsubsetsFwd$rss[19]/nrow(data)),2)
+
+#backward selection
+regfit.bwd.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="backward")
+summaryRegsubsetsBwd <- summary (regfit.bwd.KM )
+#finding the model with the best Adjusted R Squared value
+which.max(summaryRegsubsetsBwd$adjr2)
+#names(coef(regfit.bwd.KM ,17))
+adjR.backward <- round(summaryRegsubsetsBwd$adjr2[17]*100,2)
+RMSE.bwd <- round(sqrt(summaryRegsubsetsBwd$rss[17]/nrow(data)),2)
+
+#hybrid
+regfit.seqrep.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="seqrep")
+summaryRegsubsetsSeqRep <- summary (regfit.bwd.KM )
+#finding the model with the best Adjusted R Squared value
+which.max(summaryRegsubsetsSeqRep$adjr2)
+#names(coef(regfit.seqrep.KM ,17))
+adjR.hybrid <- round(summaryRegsubsetsSeqRep$adjr2[17]*100,2)
+RMSE.hybrid <- round(sqrt(summaryRegsubsetsSeqRep$rss[17]/nrow(data)),2)
+```
+
+
+##Shrinkage  
+Minimizing the coefficients of irrelevant variables using regularization i.e by applying a penalty to the coeffcients of all the predictors to minimize them. We cover two approaches here,  
+* Ridge  
+* Lasso    
+
+###Ridge
+In Ridge, the regularization penalty is applied to the square of the coeffcients.    
+```{r}
+#Creating the x matrix that the glmnet package requires
+x.KM <- model.matrix (DevFDBK~.,data )[,-1]
+y.KM <- data$DevFDBK
+
+#splitting test & train datasets
+set.seed (1)
+train=sample (1: nrow(x.KM), nrow(x.KM)/2)
+test=(- train )
+y.test=y.KM[test]
+
+#creating the grid of regularization penalty, lambda, values to test
+grid.KM <- 10^ seq (10,-2, length =100)
+
+#training ridge regression model with training data 
+ridge.mod.KM =glmnet (x.KM[train ,],y.KM[train],alpha =0, lambda =grid.KM ,thresh =1e-12)
+
+
+set.seed (1)
+#the alpha parameter value is 0 for Ridge and 1 for Lasso
+#we use the inbuilt cross validation function in glmnet to identify the best value for lambda, the regularization parameter
+cv.out.ridge =cv.glmnet (x.KM[train ,],y.KM[train],alpha =0)
+#this plot shows the change in training data MSE with lambda
+plot(cv.out.ridge)
+#the value of lambda at which training data MSE is minimum is
+bestlam.ridge =cv.out.ridge$lambda.min
+bestlam.ridge
+#using this best value of lambda to predict for the test data and calculating the test data MSE
+ridge.pred.KM=predict(ridge.mod.KM ,s=bestlam.ridge, newx=x.KM[test ,])
+RMSE.test.ridge <- round(sqrt(mean(( ridge.pred.KM -y.test)^2)),2)
+```
+
+###Lasso
+In Lasso, the regularization penalty is applied to the modulus of the coefficients.  
+```{r}
+#we reuse the x matrix, y vector, train and test datasets and the lambda grid from Ridge
+lasso.mod.KM =glmnet (x.KM[train ,],y.KM[train],alpha =1, lambda =grid.KM ,thresh =1e-12)
+
+set.seed (1)
+#the alpha parameter value is 0 for Ridge and 1 for Lasso
+#we use the inbuilt cross validation function in glmnet to identify the best value for lambda, the regularization parameter
+cv.out.lasso =cv.glmnet (x.KM[train ,],y.KM[train],alpha =1)
+#this plot shows the change in training data MSE with lambda
+plot(cv.out.lasso)
+#the value of lambda at which training data MSE is minimum is
+bestlam.lasso =cv.out.lasso$lambda.min
+bestlam.lasso
+#using this best value of lambda to predict for the test data and calculating the test data MSE
+lasso.pred.KM=predict(lasso.mod.KM ,s=bestlam.lasso, newx=x.KM[test ,])
+RMSE.test.lasso <- round(sqrt(mean(( lasso.pred.KM -y.test)^2)),2)
+
+```
+The plot below, showing Ridge on the left and Lasso on the right highlights the differences between the two approaches. For Lasso, depending on the values of the parameters chosen, some of the variables' coefficients could be set to zero. This effectively performs predictor selection. In contrast, only at the highest value of lambda does Ridge set coefficients close to zero.
+```{r}
+par(mfrow=c(1,2))
+plot(ridge.mod.KM)
+plot(lasso.mod.KM)
+```
+  
+Just to compare how a model performs without the benefit of subset selection or shrinkage, we have trained the following models:  
+*   a model with all the data provided  
+*   a model after apply preprocessing (the code used is at the top of the page)   
+
+###Note
+All models, except the raw data model, use pre-processed data.
+  
+
+```{r}
+#model training with raw data
+raw.KM <- lm(DevFDBK~.,data=dataRaw)
+summary.raw.KM <- summary (raw.KM)
+RMSE.raw <- round(sqrt(mean((summary.raw.KM$residuals)^2)),2)
+
+#model training with preprocessing but without using best subset selection
+full.KM <- lm(DevFDBK~.,data=data)
+summary.full.KM <- summary (full.KM)
+RMSE.full <- round(sqrt(mean((summary.full.KM$residuals)^2)),2)
+
+
+```
+
+##Conclusion
+The performance of all the techniques is compared in the table below. The performance of the techniques for the small dataset provided is illustrative only. We expect much superior performance with a larger dataset.  
+
+
+Technique               |Sub-type  |RMSE(Root mean squared error)
+------------------------|----------|-----------------------
+Raw data                |N/A       |`r RMSE.raw`
+------------------------|----------|-----------------------
+Only pre-processing     |N/A       |`r RMSE.full`
+------------------------|----------|-----------------------
+Best subset selection   |N/A       |`r RMSE.subset`
+------------------------|----------|-----------------------
+Stepwise selection      |Forward   |`r RMSE.fwd`
+------------------------|----------|-----------------------
+Stepwise selection      |Backward  |`r RMSE.bwd`  
+------------------------|----------|-----------------------
+Stepwise selection      |Hybrid    |`r RMSE.hybrid`
+------------------------|----------|-----------------------
+Shrinkage*              |Ridge     |`r RMSE.test.ridge`
+------------------------|----------|-----------------------
+Shrinkage*              |Lasso     |`r RMSE.test.lasso`
+------------------------|----------|-----------------------
+
+###Note
+The way the shrinkage works, we have to use separate train and test data. The RMSE for shrinkage is for test data, only whereas for the other techniques it is for the dataset the models were trained on. This is an important factor for the higher RMSE for shrinkage approaches. With sufficiently large datasets, we can use a common approach across all techniques and yet have enough data for the model to learn on. 
+

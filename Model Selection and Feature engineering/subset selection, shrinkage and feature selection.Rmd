@@ -1,0 +1,319 @@
+---
+title: "Subset selection and shrinkage"
+
+output: html_document 
+---
+##Introduction
+Including the right variables as predictors in a model is critical to its performance and the techniques used to do so are listed below. More details are provided under specific sections.  
+
+
+*  Best subset selection  
+*  Stepwise selection  
+    +  Forward  
+    +  Backward  
+    +  Hybrid  
+*  Feature selection  
+    +  Boruta  
+    +  Recursive feature elimination  
+*  Shrinkage 
+    +  Ridge  
+    +  Lasso 
+
+##Best subset selection  
+Here we try to identify the subset of predictors in a model that leads to superior measurements of prediction accuracy. This is done by fitting a least squares regression model for each possible combination of predictors. Several standard optimizations to make this computationally feasible are included.  
+
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T,message = FALSE,warning = FALSE)
+```
+
+
+```{r, echo=FALSE}
+###Function to Mark as failure if value > Theshold
+mark_failure <- function(x){
+  if(x>11){
+    return (1)
+  }else{
+    return (0)
+  }
+}
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#loading required libraries
+library(xlsx)
+library(caret)
+library(dplyr)
+library(leaps)
+library (glmnet)
+library(Boruta)
+```
+
+```{r, echo=FALSE}
+#reading data
+data <- read.csv("After Removing Missing Values.csv")
+#creating a copy of the raw data
+dataRaw <- data
+#removing unrelated variables, as judged manually
+data <- select(data,-c(X,RangeFDBK, date, time))
+#removing outliers
+data <- data[data['DevFDBK']<=19,]
+#removing low variance variables
+data <- data[-nearZeroVar(data)]
+#removing highly correlated variables
+cor <-cor(data,use="complete.obs")
+highCorData <- findCorrelation(cor, 0.98, names = F)
+data <- data[,-highCorData]
+#scaling
+DevFDBK <- data$DevFDBK
+data <- as.data.frame(scale(data))
+data$DevFDBK <- DevFDBK
+dataPreProc <- data
+
+#separating train and test data
+set.seed(1234)
+train <-createDataPartition(y=data$DevFDBK,p=0.8,list=FALSE)
+trainData <- data[train,]
+testData <- data[-train,]
+```
+
+```{r}
+#model training using best subset selection
+regfit.full.KM=regsubsets (DevFDBK~.,data=data ,nvmax =41)
+reg.summary.KM =summary (regfit.full.KM)
+
+
+#identifying the model with the best combination of predictors
+best.subset <- which.max (reg.summary.KM$adjr2)
+best.subset
+#graph showing why the chosen model is the best
+plot(reg.summary.KM$adjr2 ,xlab =" Number of Variables ", ylab=" Adjusted RSq",type="l")
+points (18, reg.summary.KM$adjr2[18], col ="red",cex =2, pch =20)
+names.best.subset <- names(coef(regfit.full.KM ,18))
+
+#the command below would list out the predictors in the model with the best Adjusted R Squared value but is not run here
+#names.best.subset
+
+#storing some measures of model performance for future use
+adjR.subset <- round(reg.summary.KM$adjr2[18]*100,2)
+RMSE.subset <- round(sqrt((reg.summary.KM$rss[18])/nrow(data)),2)
+
+#one can use other measures of model fit like Cp and BIC, instead of Adjusted R Squared. The code has been written and will be used when needed. But these have not been run here.
+# which.min (reg.summary.KM$cp )
+# plot(reg.summary.KM$cp ,xlab =" Number of Variables ",ylab="Cp",type="l")
+# points (15, reg.summary.KM$cp [15], col ="red",cex =2, pch =20)
+# namesCp <- names(coef(regfit.full.KM ,15))
+# 
+# which.min (reg.summary.KM$bic )
+# plot(reg.summary.KM$bic ,xlab=" Number of Variables ",ylab=" BIC",type="l")
+# points (2, reg.summary.KM$bic [2], col =" red",cex =2, pch =20)
+# namesBIC <- names(coef(regfit.full.KM ,2))
+# 
+# plot(regfit.full.KM ,scale ="r2")
+# plot(regfit.full.KM ,scale ="adjr2")
+# plot(regfit.full.KM ,scale ="Cp")
+# plot(regfit.full.KM ,scale ="bic")
+
+```
+
+##Stepwise selection  
+Despite optimizations, subset selection is infeasible when there are a large number of variables. Plus it is very susceptible to overfitting. Stepwise selection seeks to address these problem by restricting the number of models assessed. Within this, there are three subtypes,  
+  
+###Stepwise selection - Forward  
+In this approach, we begin with no predictors and then keep adding one best predictor at each iteration, while retaining the previously selected predictors.  
+  
+###Stepwise selection - Backward  
+In backward selection, we begin with all predictors in the model. We remove the least useful predictor, one at a time, in each iteration.  
+  
+###Stepwise selection - Hybrid  
+There are hybrid approaches that combine forward and backward selection. In these, while one new variable is added at each step, any existing variables that are not improving model fit are removed.  
+
+###Note  
+The above techniques are selecting the best model by measuring error on the same dataset that the model was trained on (training set error). An alternate approach, is to use simple train and test datasets or cross validation. The cross validation approach is shown in the Recursive Feature Elimination section that is further down below.  
+
+###Stepwise selection - Forward  
+```{r}
+#forward selection
+regfit.fwd.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="forward")
+summaryRegsubsetsFwd <- summary (regfit.fwd.KM )
+#finding the model with the best Adjusted R Squared value
+best.fwd <- which.max(summaryRegsubsetsFwd$adjr2)
+best.fwd
+#the command below would list out the predictors in the model with the best Adjusted R Squared value but is not run here
+#names(coef(regfit.fwd.KM ,19))
+
+#measures of model performance
+adjR.forward <- round(summaryRegsubsetsFwd$adjr2[19]*100,2)
+RMSE.fwd <- round(sqrt(summaryRegsubsetsFwd$rss[19]/nrow(data)),2)
+```
+###Stepwise selection - Backward  
+```{r}
+#backward selection
+regfit.bwd.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="backward")
+summaryRegsubsetsBwd <- summary (regfit.bwd.KM )
+#finding the model with the best Adjusted R Squared value
+best.bwd <- which.max(summaryRegsubsetsBwd$adjr2)
+best.bwd
+#the command below would list out the predictors in the model with the best Adjusted R Squared value but is not run here
+#names(coef(regfit.bwd.KM ,17))
+
+#measures of model performance
+adjR.backward <- round(summaryRegsubsetsBwd$adjr2[17]*100,2)
+RMSE.bwd <- round(sqrt(summaryRegsubsetsBwd$rss[17]/nrow(data)),2)
+```
+###Stepwise selection - Hybrid  
+```{r}
+#hybrid
+regfit.seqrep.KM <- regsubsets (DevFDBK~.,data=data ,nvmax =41,method ="seqrep")
+summaryRegsubsetsSeqRep <- summary (regfit.bwd.KM )
+#finding the model with the best Adjusted R Squared value
+best.hybrid <- which.max(summaryRegsubsetsSeqRep$adjr2)
+best.hybrid
+#the command below would list out the predictors in the model with the best Adjusted R Squared value but is not run here
+#names(coef(regfit.seqrep.KM ,17))
+adjR.hybrid <- round(summaryRegsubsetsSeqRep$adjr2[17]*100,2)
+RMSE.hybrid <- round(sqrt(summaryRegsubsetsSeqRep$rss[17]/nrow(data)),2)
+```
+
+###Boruta  
+Boruta creates shadow variables from the given set of variables and then fits a model. If the original variable's importance in the model is lower than that of its shadow, it is dropped. This continues iteratively till only variables that are more important than their shadows are left. 
+```{r}
+#data setup
+data1<-data
+data_failure<-sapply(data1$DevFDBK,mark_failure)
+data1$DevFDBK <- data_failure
+
+#call to the Boruta wrapper that is using random forest under the covers
+boruta.train <- Boruta(DevFDBK~., data = trainData, doTrace = 0)
+#printing the features by classification of importance
+print(boruta.train)
+#Selected predictors can be accessed with the following command. Look for variables marked "Confirmed"
+#boruta.train$finalDecision
+
+boruta <- as.data.frame(boruta.train$finalDecision)
+boruta <- filter(boruta, boruta.train$finalDecision == "Confirmed")
+
+
+#visualizing feature importance
+par(mfrow=c(1,1))
+plot(boruta.train, xlab = "", xaxt = "n")
+lz<-lapply(1:ncol(boruta.train$ImpHistory),function(i)
+boruta.train$ImpHistory[is.finite(boruta.train$ImpHistory[,i]),i])
+names(lz) <- colnames(boruta.train$ImpHistory)
+Labels <- sort(sapply(lz,median))
+axis(side = 1,las=2,labels = names(Labels),at = 1:ncol(boruta.train$ImpHistory), cex.axis = 0.7)
+
+```
+
+
+###Recursive feature elimination (RFE)  
+The RFE algorithm fits a model with all predictors. Since it uses cross validation, it produces the model's prediction performance as well. Then, it sorts the predictors by their absolute weights. From this, it picks the best subset of predictors. Then it repeats this process with the subset of predictors chosen and so on. Thus it accumulates details about the performance of each model size and the best predictors for that size. Finally, the model with the best performance is identified and the predictors used therin are chosen for further modeling. 
+
+
+```{r, message=FALSE, warning=FALSE}
+
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+trainPredictors <- dplyr::select(trainData,-c(DevFDBK))
+trainOutcome <- as.data.frame(trainData$DevFDBK)
+colnames(trainOutcome)<-c("outcome")
+results.rfe <- rfe(trainPredictors, trainOutcome$outcome, rfeControl=control,trace=F)
+print(results.rfe,15)
+numPred.rfe <- results.rfe$bestSubset
+
+#the reccommended predictor names can be accessed using the following command
+#results$optVariables
+```
+
+
+##Shrinkage  
+Minimizing the co-efficients of irrelevant variables using regularization i.e by applying a penalty to the co-efficients of all the predictors to minimize them. We cover two approaches here,  
+*  Ridge  
+*  Lasso    
+
+###Ridge
+In Ridge, the regularization penalty is applied to the square of the coefficients.    
+```{r}
+#Creating the x matrix that the glmnet package requires
+x.KM <- model.matrix (DevFDBK~.,data )[,-1]
+y.KM <- data$DevFDBK
+
+#splitting test & train datasets
+set.seed (1)
+train=sample (1: nrow(x.KM), nrow(x.KM)/2)
+test=(- train )
+y.test=y.KM[test]
+
+#creating the grid of regularization penalty, lambda, values to test
+grid.KM <- 10^ seq (10,-2, length =100)
+
+#training ridge regression model with training data 
+ridge.mod.KM =glmnet (x.KM[train ,],y.KM[train],alpha =0, lambda =grid.KM ,thresh =1e-12)
+
+
+set.seed (1)
+#the alpha parameter value is 0 for Ridge and 1 for Lasso
+#we use the inbuilt cross validation function in glmnet to identify the best value for lambda, the regularization parameter
+cv.out.ridge =cv.glmnet (x.KM[train ,],y.KM[train],alpha =0)
+#this plot shows the change in training data MSE with lambda
+plot(cv.out.ridge)
+#the value of lambda at which training data MSE is minimum is
+bestlam.ridge =cv.out.ridge$lambda.min
+bestlam.ridge
+```
+
+###Lasso
+In Lasso, the regularization penalty is applied to the modulus of the coefficients.  
+```{r}
+#we reuse the x matrix, y vector, train and test datasets and the lambda grid from Ridge
+lasso.mod.KM =glmnet (x.KM[train ,],y.KM[train],alpha =1, lambda =grid.KM ,thresh =1e-12)
+
+set.seed (1)
+#the alpha parameter value is 0 for Ridge and 1 for Lasso
+#we use the inbuilt cross validation function in glmnet to identify the best value for lambda, the regularization parameter
+cv.out.lasso =cv.glmnet (x.KM[train ,],y.KM[train],alpha =1)
+#this plot shows the change in training data MSE with lambda
+plot(cv.out.lasso)
+#the value of lambda at which training data MSE is minimum is
+bestlam.lasso =cv.out.lasso$lambda.min
+bestlam.lasso
+```
+The plot below, showing Ridge on the left and Lasso on the right highlights the differences between the two approaches. It is seen that Lasso is more aggressive in shrinking coefficients towards zero.  
+```{r}
+par(mfrow=c(1,2))
+plot(ridge.mod.KM)
+plot(lasso.mod.KM)
+
+```
+  
+  
+
+##Conclusion
+The number of predictors recommended by each of the techniques is listed below. The predictor names can be extracted easily from the code provided above.  
+
+
+Technique               |Sub-type  |# of predictors recommended  
+------------------------|----------|----------------------------
+Raw data                |N/A       | `r dim(dataRaw)[2]`
+------------------------|----------|----------------------------
+Only pre-processing     |N/A       | `r dim(dataPreProc)[2]`
+------------------------|----------|----------------------------
+Best subset selection   |N/A       | `r best.subset`
+------------------------|----------|----------------------------
+Stepwise selection      |Forward   | `r best.fwd`
+------------------------|----------|----------------------------
+Stepwise selection      |Backward  | `r best.bwd`  
+------------------------|----------|----------------------------
+Stepwise selection      |Hybrid    | `r best.hybrid` 
+------------------------|----------|----------------------------
+Feature selection       |Boruta    | `r nrow(boruta)`
+------------------------|----------|----------------------------
+Feature selection       |RFE       | `r numPred.rfe` 
+------------------------|----------|----------------------------
+Shrinkage*              |Ridge     |`r ncol(data)`
+------------------------|----------|----------------------------
+Shrinkage*              |Lasso     |`r ncol(data)`
+------------------------|----------|----------------------------
+
+###Note  
+Shrinkage, by definition, does not seek to directly remove predictors. It only minimizes the coefficients, as shown in the plots above. It retains all the predictors.
+

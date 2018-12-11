@@ -1,0 +1,148 @@
+---
+title: "Exploratory data analysis"
+output:
+  html_document: default
+  word_document: default
+---
+##Executive summary  
+Exploratory analysis of data provides insights into the data available for modeling that guides future activities like choosing what data pre processing techniques to use and algorithms to apply. A few of the techniques used are explained below.   
+
+##Distribution of data  
+This analysis reveals that most of the data points were for the failure condition (DevFDBK > 11). This is possibly a key reason for the prediction models struggling to predict non-failure conditions.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#loading required libraries
+library(ggplot2)
+library(caret)
+library(dplyr)
+library(calibrate)
+library(ade4)
+```
+
+```{r}
+#reading data
+data <- read.csv("After Removing Missing Values.csv")
+data <- dplyr::select(data,-c(X,RangeFDBK,date,time))
+failures<-ifelse(data$DevFDBK>11,"Failure","Normal")
+#removing low variance variables
+data <- data[-nearZeroVar(data)]
+#removing highly correlated variables
+cor <-cor(data,use="complete.obs")
+highCorData <- findCorrelation(cor, 0.8, names = F)
+data <- data[,-highCorData]
+#scaling
+DevFDBK <- data$DevFDBK
+data <- as.data.frame(scale(data))
+data$DevFDBK <- DevFDBK
+#removing outliers
+data1<-data
+data=data[data['DevFDBK']<=19,]
+devFDBK<- data['DevFDBK']
+
+#transforming continuous variable/ values into two classes for the classifier
+failures<-ifelse(data$DevFDBK>11,"Failure","Normal")
+counts <- table(failures)
+pct <- round(counts/sum(counts)*100)
+lbls <- c("Failure", "Normal")
+lbls <- paste(lbls,pct)
+lbls <- paste(lbls,"%", sep = "")
+par(mfrow=c(1,2))
+barplot(counts,col=c("red","green"),ylim=c(0,150),ylab = ("# of observations"))
+pie(counts,col=c("red","green"), labels = lbls)
+```
+
+
+##Variables that have high correlation with the outcome (DevFDBK)  
+This is an early and exploratory variable shortlisting step. Further analysis is taken up at later stages. Here we identify the top 10 candidates to include in a model.  
+```{r}
+#this is a function to find the correlation of all columns of a data frame "data" with a specific column within the same data frame and labeled as "parameter"
+find_correlation <- function(data,parameter){
+  
+  correlation=sapply(data,function(x) cor(x,data[parameter]))
+  column_names<-names(correlation)
+  cor_value <- unname(correlation,force=FALSE)
+  result <- data.frame(column_names,cor_value)
+  result <- result[order(-result$cor_value),]
+  row.names(result) <- NULL
+  return (result)
+  
+} 
+#here we call the custom correlation function
+cor_df <- find_correlation(data,"DevFDBK")  
+head(cor_df,10)
+
+```
+
+##Plots exploring variable's impact on failure   
+The first plot is an example of a strong predictor (IDCsensor1frontLEDlightquantity) of failures (DevFDBK>11).  
+
+```{r}
+data['failure'] <- ifelse(data$DevFDBK>11,1,0)
+
+data$failure <- factor(data$failure,levels = c(1,0),labels = c("Failure", "Not Failure"))
+
+ggplot(data,aes(IDCsensor1frontLEDlightquantity,DevFDBK))+
+       geom_point()+
+       geom_smooth(method="lm")+
+       facet_grid(.~failure  )+
+       ggtitle("Failure and Normal")
+```
+  
+The second plot illustrates how one variable (LDpowerY) has low influence on the outcome. The plot shows that failures and normal readings can occur within the same range of values of the variable. This variable is usually discarded, unless other analysis show otherwise.  
+```{r}
+
+ggplot(data,aes(LDpowerY,DevFDBK,col=failure),col=failure)+
+      geom_point()+
+      geom_smooth(method="lm")+
+      ggtitle("LDpowerY vs DevFDBK")
+
+```
+  
+##One hot encoding  
+This is used for categorical variables that can take on different values. One hot encoding allows translation of any single variable into a multiple columns, one per allowed value of the variable. Binary values are then used to indicate which of the new columns matches the value of the original categorical value. From this point on, a linear regression algorithm can perform model fitting with the new columns. Without this, linear regression cannot be done.  
+From our observation, the columns loaded into the "names" variable below appeared to be categorical variables for which one hot encoding has been applied.  
+```{r, message=F, warning=F}
+#identifying the variables whose values are candidates for one hot encoding 
+names=c("MaxtoneramountUseradjustmentvalueY","MaxtoneramountUseradjustmentvalueC","MaxtoneramountUseradjustmentvalueK")
+dataPreOHC <- data
+
+#here we are identifying the index of the column of interest in the source data frame
+ind=c()
+j=1;
+for (i in names){
+  
+  if(i %in% colnames(data)){
+    
+    ind[j]=(which(colnames(data)==i))
+  }
+   j=j+1
+}
+
+#appending the variables of interest, as identified above
+data[names]<-data1[ind]
+for (i in names){
+  
+  data[i]<- as.factor(unlist(data[i]))
+}
+
+#make sure that the ade4 package is installed so one hot encoding can be performed
+for (i in names){
+  df_all_dummy = acm.disjonctif(data[i])
+  data[i] = NULL
+  data= cbind(data, df_all_dummy)
+}
+
+#regex to rename columns for further processing
+colnames(data) <-gsub("\\.", "dot", colnames(data))
+colnames(data) <-gsub("-", "minus", colnames(data))
+
+```
+
+Here are the names of the new columns added by one hot encoding.
+```{r}
+names(df_all_dummy)
+```
+
+
+
+

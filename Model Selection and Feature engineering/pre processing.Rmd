@@ -1,0 +1,119 @@
+---
+title: "Data pre processing"
+
+output: html_document
+---
+
+Data pre-processing is critical to build a reliable prediction model. We discuss the three most important pre-processing concepts that we have had to use on the data provided thus far by KM.  
+  
+* Variables that increase the Standard Errors of valid predictors.  
+* Variables that confound the effect of valid predictors.  
+* Outliers that do not conform to the true relationship between valid predictors and the outcome.  
+
+##Variables that increase the Standard Errors of valid predictors  
+When irrelevant variables are included as predictors, they cause an undesirable increase in the standard error of the valid predictors. In some cases, the irrelevance of a variable is obvious. For example, the serial number of the observation in a dataset. These can be manually removed. Another step in removing such irrelevant predictors is to check their variance. If they do not vary much, clearly, they have little influence on the outcome. Both of these steps need to be executed carefully. Here is the code used for the above ideas.    
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#loading required libraries
+library(caret)
+library(dplyr)
+```
+
+```{r}
+#reading in data
+data <- read.csv("After Removing Missing Values.csv")
+dataRaw <- data
+```
+
+###Explicit identification/removal of irrelevant variables   
+In this case, we are trying to predict the value of the column DevFDBK (outcome). X (first column) seems to be an observation serial number column. Date and time were inferred to not contribute to outcome in this case. But in other cases, date and time could be contributors. This has to be decided on a case to case basis. KM advised RangeFDBK was another coutcome and inferred to not predict DevFDBK. Hence it was removed.  
+```{r}
+data <- select(data,-c(X,date,time,RangeFDBK))
+dataManual <- data
+```
+
+###Removing variables with low variance  
+```{r}
+#finding variables that have low variance
+lowVar <- nearZeroVar(data)
+datalowVar <- data[nearZeroVar(data)]
+data <-data[-nearZeroVar(data)]
+dataHvar <- data
+#dim(datalowVar)[2]
+```
+The number of columns that had low variance and hence are to be eliminated is `r dim(datalowVar)[2]`.  
+
+##Variables that confound the effect of valid predictors   
+Confounding variables distort the relationship between a true predictor and the outcome. The following code shows how this is determined and resolved using correlation.  
+```{r}
+#we intend to predict the value to DevFDBK. So, we need to remove this in the following correlation check step. Before that, we save a copy of DevFDBK for later use.
+DevFDBK <- data$DevFDBK
+data <- select(data,-c(DevFDBK))
+
+#normalizing data using the r "scale" function so that the predictors have mean = 0 and SD = 1. This balances the effect of each feature and allows models to be trained correctly, without being overly influenced by variables with a broader range of absolute values.
+data <- as.data.frame(scale(data))
+
+#finding and removing correlated data.
+corData <- cor(data,use="complete.obs")
+highlyCorData <- findCorrelation(corData, 0.98, names = F)
+lowCorData <- data[,-highlyCorData]
+highCorData <- data[,highlyCorData]
+
+#adding back the DevFDBK column from the saved copy 
+data <- cbind(lowCorData,DevFDBK)
+dataLCor <- data
+
+#dim(highCorData)[2]
+#dim(lowCorData)[2]
+```
+The number of columns that had high correlation and hence are to be eliminated is `r dim(highCorData)[2]`. That leaves `r dim(lowCorData)[2]` statistically viable predictors in the dataset to train a prediction model on.   
+
+##Outliers that do not conform to the true relationship between valid predictors and the outcome   
+Outliers are analyzed using very specific measures called leverage and influence. Leverage refers to observation-prediction combinations whose values fall outside the range of that for the other observations. Some of these observations with high leverage do not conform to the observation-prediction relationship of the other observations. Such observations are said to have high leverage.  
+
+
+```{r}
+#training a model, analyzing leverage & influence 
+trainlm <- lm(DevFDBK~., data)
+lev <- hat(model.matrix(trainlm))
+cook <- cooks.distance(trainlm)
+#summary(trainlm)$adj.r.squared
+
+#removing outliers, training a new model, analyzing leverage & influence
+dataOutLierRem <- filter(data, DevFDBK<19)
+trainlmOLR <- lm(DevFDBK~., dataOutLierRem)
+levOLR <- hat(model.matrix(trainlmOLR))
+cookOLR <- cooks.distance(trainlmOLR)
+#summary(trainlmOLR)$adj.r.squared
+```
+
+The removal of 3 observations with DevFDBK values equal to 19 or above improves the variability explained by the model from `r round(summary(trainlm)$adj.r.squared*100,2)`% to `r round(summary(trainlmOLR)$adj.r.squared*100,2)`%.    
+The plots below graphically demonstrate the reduction in data spread.  
+
+###Note: 
+Outlier removal has to be done carefully to not eliminate the very anamolies that we are looking for.  
+```{r}
+#plotting leverage & influence graphs
+par(mfrow=c(2,2))
+plot(lev, main = "Leverage", ylab = "Leverage", cex.axis = 0.75, ylim = c(0.0,1.0))
+plot(cook, main = "Cook's distance", ylab = "Influence", cex.axis = 0.75, ylim = c(0.0,2.0))
+plot(levOLR, main = "Leverage after removing outliers", ylab = "Leverage" , cex.axis = 0.75, ylim = c(0.0,1.0))
+plot(cookOLR, main = "Cook's distance after removing outliers", ylab = "Influence", cex.axis = 0.75, ylim = c(0.0,2.0))
+```
+
+##Conclusion  
+Here are the dimensions of the data frame after various stages of processing  
+  
+  
+Stage                               | # of rows                 | # of columns
+------------------------------------|---------------------------|-------------
+Source data                         | `r dim(dataRaw)[1]`       | `r dim(dataRaw)[2]`
+------------------------------------|---------------------------|-------------
+Explicit removal                    | `r dim(dataManual)[1]`    | `r dim(dataManual)[2]`
+------------------------------------|---------------------------|-------------
+Low variance removal                | `r dim(dataHvar)[1]`      | `r dim(dataHvar)[2]`
+------------------------------------|---------------------------|-------------
+High correlation removal            | `r dim(dataLCor)[1]`      | `r dim(dataLCor)[2]`
+------------------------------------|---------------------------|-------------
+Outlier removal                     | `r dim(dataOutLierRem)[1]`| `r dim(dataOutLierRem)[2]`
+------------------------------------|---------------------------|-------------
