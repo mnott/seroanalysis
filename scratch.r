@@ -74,6 +74,20 @@ names(ff_results)[names(ff_results) == "End"]    <- "Time"
 ff_results$DateTime <- as.POSIXct(paste(ff_results$Date, format(as.POSIXct(ff_results$Time), "%H:%M:%S")))
 
 
+
+
+
+
+
+# Search for Features by work center
+ff_results_with_wc <- read_excel("data/input/medina/L06/inspection_results_November_December_L06_Medina.xlsx")
+names(ff_results_with_wc)[names(ff_results_with_wc) == "Short text for the characteristic"] <- "Feature"
+names(ff_results_with_wc)[names(ff_results_with_wc) == "Work ctr"] <- "WorkCenter"
+df_features_workcenters <- sqldf("select distinct Feature, WorkCenter from ff_results_with_wc order by Feature")
+
+
+
+
 limit <- 0
 
 
