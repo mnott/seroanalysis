@@ -9,9 +9,10 @@
 #
 # Set Options and Working directory
 #
-Sys.setenv(LANG = "en")  # Set R language to English
-options(digits=5)        # Default to 5 digits
-options(warn = -1)       # Turn off warnings
+Sys.setenv(LANG = "en")                # Set R language to English
+Sys.setlocale("LC_ALL", 'en_US.UTF-8') # Set to UTF-8
+options(digits=5)                      # Default to 5 digits
+options(warn = -1)                     # Turn off warnings
 this.dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
 setwd(this.dir)
 rm(list=ls())
