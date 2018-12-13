@@ -17,6 +17,9 @@ library(PerformanceAnalytics) # For Correlation. Needs PerformanceAnalytics pack
 #
 # install.packages("readxl")
 library(readxl)                # For reading Excel, needs readxl package
+library(xlsx)                  # For writing Excel
+options(xlsx.datetime.format="yyyy-mm-dd HH:mm:ss")
+
 
 # install.packages("car")
 library(car)     # CAR library. Needs car package
@@ -35,6 +38,11 @@ library(sqldf)
 # Load SPSS equivalent functions
 #
 source("helpers/spss.functions.r")
+
+#
+# Load Time Series Functions
+#
+library(xts)
 
 #
 # Load our own functions
