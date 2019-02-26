@@ -301,6 +301,20 @@ plot(r, main = "Cross-Correlation: -Azucar leading to Alto")
 abline(v=0, col = "blue", lty = 3)
 abline(v=-4, col = "red",  lty = 3)
 
+# Agua => Alto
+r = ccf( df_combined$agua, df_combined$alto,        lag.max = 36, plot = FALSE)
+plot(r, main = "Cross-Correlation: Agua leading to Alto")
+abline(v=0, col = "blue", lty = 3)
+abline(v=-4, col = "red",  lty = 3)
+abline(v=-24, col = "red",  lty = 3)
+
+# Azucar => Alto
+r = ccf(-df_combined$azucar, df_combined$alto,      lag.max = 36, plot = FALSE)
+plot(r, main = "Cross-Correlation: -Azucar leading to Alto")
+abline(v=0, col = "blue", lty = 3)
+abline(v=-4, col = "red",  lty = 3)
+abline(v=-24, col = "red",  lty = 3)
+
 
 # Temperatura => Alto
 par(mfrow=c(1,1), mar=c(5.1,6.1,5.1,5.1))
