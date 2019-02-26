@@ -177,7 +177,6 @@ rm(df, df_agua, df_azucar, df_temperatura, df_alto)
 outfile <- paste(datadir, "output.pdf", sep = "")
 pdf(outfile, width = 21, height = 15)
 
-
 df <- df_combined
 plot.ts(df)
 
@@ -188,14 +187,20 @@ plot.ts(df)
 #
 ##############################################################################
 
-par(mfrow=c(2,1))
+par(mfrow=c(2,1), mar=c(5.1,6.1,5.1,5.1))
 df_raw <- df_combined
 matplot(x = df_raw$time, y = as.matrix(df_raw[-1]), type='l', pch=1, col = 1:4, xlab='Date (January)', ylab = 'Values', xaxt="n")
+title(main = "Measured Data")
 legend("topright", inset=.05, legend=colnames(df_raw[2:5]), pch=1, col= 1:4, horiz=TRUE)
 timelabels<-format(df_raw$time,"%d")
 axis(1,at=df_raw$time,labels=timelabels)
 
-r = acf(df_combined$agua,        lag.max = nrow(df_combined))
+r = acf(df_combined$agua,        lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Auto-Correlation: Agua")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
 par(mfrow=c(1,1))
 
 
@@ -206,6 +211,9 @@ par(mfrow=c(1,1))
 #
 ##############################################################################
 
+#
+# Intra-Week Pattern
+#
 
 # Convert Timestamp into hours
 # df_combined$time <- as.numeric(df_combined$time - df_combined[1, "time"]) / 3600
@@ -213,12 +221,36 @@ par(mfrow=c(1,1))
 #
 # Auto Correlations
 #
-par(mfrow=c(2,2))
+par(mfrow=c(2,2), mar=c(5.1,6.1,5.1,5.1))
 
-r = acf(df_combined$agua,        lag.max = nrow(df_combined))
-r = acf(df_combined$azucar,      lag.max = nrow(df_combined))
-r = acf(df_combined$temperatura, lag.max = nrow(df_combined))
-r = acf(df_combined$alto,        lag.max = nrow(df_combined))
+r = acf(df_combined$agua,        lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Auto-Correlation: Agua")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+
+r = acf(df_combined$azucar,      lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Auto-Correlation: Azucar")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+r = acf(df_combined$temperatura, lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Auto-Correlation: Temperatura")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+r = acf(df_combined$alto,        lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Auto-Correlation: Alto")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
 
 par(mfrow=c(1,1))
 
@@ -226,22 +258,88 @@ par(mfrow=c(1,1))
 #
 # Cross Correlations
 #
-par(mfrow=c(2,3))
+par(mfrow=c(2,3), mar=c(5.1,6.1,5.1,5.1))
 
-r = ccf(df_combined$agua,        -df_combined$azucar,      lag.max = nrow(df_combined))
-r = ccf(df_combined$agua,        -df_combined$temperatura, lag.max = nrow(df_combined))
-r = ccf(df_combined$azucar,       df_combined$temperatura, lag.max = nrow(df_combined))
-r = ccf(df_combined$agua,         df_combined$alto,        lag.max = nrow(df_combined))
-r = ccf(df_combined$azucar,      -df_combined$alto,        lag.max = nrow(df_combined))
-r = ccf(df_combined$temperatura, -df_combined$alto,        lag.max = nrow(df_combined))
+# Agua => Azucar
+r = ccf(df_combined$agua,        -df_combined$azucar,      lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: Agua vs. -Azucar")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+# Agua => -Temperatura
+r = ccf(df_combined$agua,       -df_combined$temperatura, lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: Agua vs. -Temperatura")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+# Azugar => Temperatura
+r = ccf(df_combined$azucar,       df_combined$temperatura, lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: Azucar vs. Temperatura")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+# Alto => Agua
+r = ccf( df_combined$alto,        df_combined$agua,        lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: Alto vs. Agua")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+# Alto => Azucar
+r = ccf(-df_combined$alto,        df_combined$azucar,      lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: -Alto vs. Azucar")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
+
+r = ccf(-df_combined$alto,        df_combined$temperatura, lag.max = nrow(df_combined), plot = FALSE)
+plot(r, main = "Cross-Correlation: -Alto vs. Temperatura")
+abline(v=0, col = "blue", lty = 3)
+abline(v=90, col = "red",  lty = 3)
+abline(v=180, col = "red",  lty = 3)
+abline(v=270, col = "red",  lty = 3)
 
 par(mfrow=c(1,1))
 
+
+#
+# Intra-Day Pattern
+#
+par(mfrow=c(2,1), mar=c(5.1,6.1,5.1,5.1))
+
+# Alto => Agua
+r = ccf( df_combined$alto,        df_combined$agua,        lag.max = 12, plot = FALSE)
+plot(r, main = "Cross-Correlation: Alto vs. Agua")
+abline(v=0, col = "blue", lty = 3)
+abline(v=4, col = "red",  lty = 3)
+
+# Alto => Azucar
+r = ccf(-df_combined$alto,        df_combined$azucar,      lag.max = 12, plot = FALSE)
+plot(r, main = "Cross-Correlation: -Alto vs. Azucar")
+abline(v=0, col = "blue", lty = 3)
+abline(v=4, col = "red",  lty = 3)
+
+
+# Alto => Temperatura
+par(mfrow=c(1,1), mar=c(5.1,6.1,5.1,5.1))
+r = ccf(-df_combined$alto,        df_combined$temperatura, lag.max = 24, plot = FALSE)
+plot(r, main = "Cross-Correlation: -Alto vs. Temperatura")
+abline(v=0, col = "blue", lty = 3)
+abline(v=-11, col = "red",  lty = 3)
+abline(v=21, col = "red",  lty = 3)
+
+par(mfrow=c(1,1))
+
+
 dev.off()
-
-
-
-
 
 
 
