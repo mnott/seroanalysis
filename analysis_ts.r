@@ -167,6 +167,12 @@ df_combined <- merge(df_combined, df_alto)
 #
 rm(df, df_agua, df_azucar, df_temperatura, df_alto)
 
+#
+# Write out CSV: Raw Data
+#
+csv_data <- paste(datadir, "data_raw.csv", sep = "")
+write.csv(df_combined, file = csv_data, row.names=F)
+
 
 ##############################################################################
 #
@@ -239,49 +245,83 @@ par(mfrow=c(1,1))
 #
 # Auto Correlations
 #
-autocor <- function (df, var, title) {
+df_acf <- data.frame()
+
+autocor <- function (df, var, title, df_out, varname) {
   r = acf(var, lag.max = nrow(df), plot = FALSE)
   plot(r, main = title)
   abline(v=0, col = "blue", lty = 3)
   abline(v=90, col = "red",  lty = 3)
   abline(v=180, col = "red",  lty = 3)
   abline(v=270, col = "red",  lty = 3)
+
+  if(! "lag" %in% colnames(df_out)) {
+    df_out <- do.call(rbind.data.frame, as.list(r$lag))
+    names(df_out) <- c("lag")
+  }
+  df_out[[varname]] <- r$acf
+
+  return(df_out)
 }
 
 
 par(mfrow=c(2,2), mar=c(5.1,6.1,5.1,5.1))
 
-autocor(df_combined, df_combined$agua,        "Auto-Correlation: Agua")
-autocor(df_combined, df_combined$azucar,      "Auto-Correlation: Azucar")
-autocor(df_combined, df_combined$temperatura, "Auto-Correlation: Temperatura")
-autocor(df_combined, df_combined$alto,        "Auto-Correlation: Alto")
+df_acf <- autocor(df_combined, df_combined$agua,        "Auto-Correlation: Agua",        df_acf, "agua")
+df_acf <- autocor(df_combined, df_combined$azucar,      "Auto-Correlation: Azucar",      df_acf, "azucar")
+df_acf <- autocor(df_combined, df_combined$temperatura, "Auto-Correlation: Temperatura", df_acf, "temperatura")
+df_acf <- autocor(df_combined, df_combined$alto,        "Auto-Correlation: Alto",        df_acf, "alto")
 
 par(mfrow=c(1,1))
+
+#
+# Write out CSV: ACF
+#
+csv_data <- paste(datadir, "data_acf.csv", sep = "")
+write.csv(df_acf, file = csv_data, row.names=F)
+
 
 
 #
 # Cross Correlations
 #
-crosscor <- function (df, lead, lag, title) {
+df_ccf <- data.frame()
+
+crosscor <- function (df, lead, lag, title, df_out, varname) {
   r = ccf(lead, lag, lag.max = nrow(df), plot = FALSE)
   plot(r, main = title)
   abline(v=0, col = "blue", lty = 3)
   abline(v=90, col = "red",  lty = 3)
   abline(v=180, col = "red",  lty = 3)
   abline(v=270, col = "red",  lty = 3)
+
+  if(! "lag" %in% colnames(df_out)) {
+    df_out <- do.call(rbind.data.frame, as.list(r$lag))
+    names(df_out) <- c("lag")
+  }
+  df_out[[varname]] <- r$acf
+
+  return(df_out)
 }
 
 
 par(mfrow=c(2,3), mar=c(5.1,6.1,5.1,5.1))
 
-crosscor(df_combined,  df_combined$agua,        -df_combined$azucar,      "Cross-Correlation: Agua leading to -Azucar")
-crosscor(df_combined,  df_combined$agua,        -df_combined$temperatura, "Cross-Correlation: Agua leading to -Temperatura")
-crosscor(df_combined,  df_combined$azucar,       df_combined$temperatura, "Cross-Correlation: Azucar leading to Temperatura")
-crosscor(df_combined,  df_combined$agua,         df_combined$alto,        "Cross-Correlation: Agua leading to Alto")
-crosscor(df_combined, -df_combined$azucar,       df_combined$alto,        "Cross-Correlation: -Azucar leading to Alto")
-crosscor(df_combined, -df_combined$temperatura,  df_combined$alto,        "Cross-Correlation: -Temperatura leading to Alto")
+df_ccf <- crosscor(df_combined,  df_combined$agua,        -df_combined$azucar,      "Cross-Correlation: Agua leading to -Azucar",       df_ccf, "agua_azucar")
+df_ccf <- crosscor(df_combined,  df_combined$agua,        -df_combined$temperatura, "Cross-Correlation: Agua leading to -Temperatura",  df_ccf, "agua_temperatura")
+df_ccf <- crosscor(df_combined,  df_combined$azucar,       df_combined$temperatura, "Cross-Correlation: Azucar leading to Temperatura", df_ccf, "azucar_azucar")
+df_ccf <- crosscor(df_combined,  df_combined$agua,         df_combined$alto,        "Cross-Correlation: Agua leading to Alto",          df_ccf, "agua_alto")
+df_ccf <- crosscor(df_combined, -df_combined$azucar,       df_combined$alto,        "Cross-Correlation: -Azucar leading to Alto",       df_ccf, "azucar_alto")
+df_ccf <- crosscor(df_combined, -df_combined$temperatura,  df_combined$alto,        "Cross-Correlation: -Temperatura leading to Alto",  df_ccf, "temperatura_alto")
 
 par(mfrow=c(1,1))
+
+#
+# Write out CSV: CCF
+#
+csv_data <- paste(datadir, "data_ccf.csv", sep = "")
+write.csv(df_ccf, file = csv_data, row.names=F)
+
 
 
 #
