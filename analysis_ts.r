@@ -309,7 +309,7 @@ par(mfrow=c(2,3), mar=c(5.1,6.1,5.1,5.1))
 
 df_ccf <- crosscor(df_combined,  df_combined$agua,        -df_combined$azucar,      "Cross-Correlation: Agua leading to -Azucar",       df_ccf, "agua_azucar")
 df_ccf <- crosscor(df_combined,  df_combined$agua,        -df_combined$temperatura, "Cross-Correlation: Agua leading to -Temperatura",  df_ccf, "agua_temperatura")
-df_ccf <- crosscor(df_combined,  df_combined$azucar,       df_combined$temperatura, "Cross-Correlation: Azucar leading to Temperatura", df_ccf, "azucar_azucar")
+df_ccf <- crosscor(df_combined,  df_combined$azucar,       df_combined$temperatura, "Cross-Correlation: Azucar leading to Temperatura", df_ccf, "azucar_temperatura")
 df_ccf <- crosscor(df_combined,  df_combined$agua,         df_combined$alto,        "Cross-Correlation: Agua leading to Alto",          df_ccf, "agua_alto")
 df_ccf <- crosscor(df_combined, -df_combined$azucar,       df_combined$alto,        "Cross-Correlation: -Azucar leading to Alto",       df_ccf, "azucar_alto")
 df_ccf <- crosscor(df_combined, -df_combined$temperatura,  df_combined$alto,        "Cross-Correlation: -Temperatura leading to Alto",  df_ccf, "temperatura_alto")
